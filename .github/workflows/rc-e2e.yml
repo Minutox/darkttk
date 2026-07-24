@@ -78,7 +78,7 @@ jobs:
           WORKSPACE_IDENTITY_SECRET: rc-e2e-workspace-secret-with-at-least-32
       - name: Upload API diagnostics on failure
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: rc-api-diagnostics
           path: api.log
