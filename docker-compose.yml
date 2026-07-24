@@ -1,0 +1,87 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: darkttk
+      POSTGRES_USER: darkttk
+      POSTGRES_PASSWORD: darkttk
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U darkttk"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7.4-alpine
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ./services/api
+    env_file: .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - media_data:/app/work/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  render-worker:
+    build:
+      context: ./services/api
+    command: celery -A darkttk.tasks worker -Q video.render --concurrency=1
+    env_file: .env
+    volumes:
+      - media_data:/app/work/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  publish-worker:
+    build:
+      context: ./services/api
+    command: celery -A darkttk.tasks worker -Q social.publish --concurrency=2
+    env_file: .env
+    volumes:
+      - media_data:/app/work/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  analytics-worker:
+    build:
+      context: ./services/api
+    command: celery -A darkttk.tasks worker -Q social.metrics --concurrency=1
+    env_file: .env
+    volumes:
+      - media_data:/app/work/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+  media_data:

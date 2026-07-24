@@ -1,0 +1,28 @@
+{
+  "product": "DarkTTK",
+  "version": "1.0.0-rc.1",
+  "checkpoint": 4,
+  "schema_version": 9,
+  "migration_range": ["0001", "0009"],
+  "required_gates": [
+    "frontend-lint",
+    "frontend-build-render",
+    "production-dependency-audit",
+    "api-pytest",
+    "api-compileall",
+    "postgres-migration-chain",
+    "rc-e2e",
+    "container-build",
+    "compose-production-config",
+    "codeql"
+  ],
+  "conditional_integrations": {
+    "password_recovery": "resend credentials and verified sender required",
+    "tiktok": "audited application, OAuth credentials and scopes required",
+    "trend_connectors": "source-specific authorization and credentials required",
+    "sites": "account identity and project registration required"
+  },
+  "rollback_strategy": "immutable previous image plus forward-compatible database correction",
+  "promotion_document": "docs/RC1-PROMOTION-ROLLBACK.md",
+  "evidence_document": "docs/RC1-FINAL-EVIDENCE.md"
+}

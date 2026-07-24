@@ -1,0 +1,85 @@
+name: RC end-to-end
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  rc-smoke:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: darkttk
+          POSTGRES_USER: darkttk
+          POSTGRES_PASSWORD: darkttk
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U darkttk"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/api/requirements.txt
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22.13"
+          cache: npm
+      - run: pip install -r services/api/requirements.txt
+      - name: Apply release migrations
+        run: |
+          for migration in services/api/migrations/*.sql; do
+            psql "$DATABASE_URL" --set ON_ERROR_STOP=1 --file "$migration"
+          done
+        env:
+          DATABASE_URL: postgresql://darkttk:darkttk@127.0.0.1:5432/darkttk
+      - name: Start API
+        run: |
+          uvicorn darkttk.main:app --app-dir services/api --host 127.0.0.1 --port 8000 > api.log 2>&1 &
+          for attempt in {1..30}; do
+            curl --fail --silent http://127.0.0.1:8000/health/ready && exit 0
+            sleep 1
+          done
+          cat api.log
+          exit 1
+        env:
+          APP_SECRET: rc-e2e-app-secret-with-at-least-32-characters
+          DATABASE_URL: postgresql+psycopg://darkttk:darkttk@127.0.0.1:5432/darkttk
+          REDIS_URL: redis://127.0.0.1:6379/0
+          AUTO_CREATE_SCHEMA: "false"
+          WORKSPACE_IDENTITY_SECRET: rc-e2e-workspace-secret-with-at-least-32
+          ENCRYPTION_KEY: rc-e2e-provider-encryption-key
+          READINESS_REQUIRE_REDIS: "true"
+      - run: node tests/e2e/rc-smoke.mjs
+        env:
+          DARKTTK_API_URL: http://127.0.0.1:8000
+          WORKSPACE_IDENTITY_SECRET: rc-e2e-workspace-secret-with-at-least-32
+      - name: Upload API diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rc-api-diagnostics
+          path: api.log
+          retention-days: 7
