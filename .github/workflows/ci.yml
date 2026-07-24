@@ -52,4 +52,11 @@ jobs:
         with:
           persist-credentials: false
       - run: docker build --pull --tag darkttk-api:${{ github.sha }} services/api
-      - run: docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet
+      - name: Validate production Compose configuration
+        run: |
+          cp .env.example .env
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet
+        env:
+          POSTGRES_PASSWORD: ci-postgres-password
+          REDIS_PASSWORD: ci-redis-password
+          RELEASE_VERSION: ci
