@@ -5,6 +5,13 @@ const apiUrl = (process.env.DARKTTK_API_URL || "http://127.0.0.1:8000").replace(
 const secret = process.env.WORKSPACE_IDENTITY_SECRET;
 assert.ok(secret, "WORKSPACE_IDENTITY_SECRET is required");
 
+async function assertStatus(response, expected) {
+  if (response.status === expected) {
+    return;
+  }
+  assert.equal(response.status, expected, await response.text());
+}
+
 const timestamp = Math.floor(Date.now() / 1000).toString();
 const identity = {
   email: `rc-e2e-${Date.now()}@example.com`,
@@ -22,7 +29,7 @@ const exchange = await fetch(`${apiUrl}/v1/auth/workspace-exchange`, {
   },
   body: JSON.stringify(identity),
 });
-assert.equal(exchange.status, 200, await exchange.text());
+await assertStatus(exchange, 200);
 const tokens = await exchange.json();
 assert.ok(tokens.access_token);
 assert.ok(tokens.refresh_token);
@@ -33,9 +40,9 @@ const [dashboardResponse, operationsResponse, costsResponse] = await Promise.all
   fetch(`${apiUrl}/v1/operations/status`, { headers: authorization }),
   fetch(`${apiUrl}/v1/operations/costs/summary`, { headers: authorization }),
 ]);
-assert.equal(dashboardResponse.status, 200, await dashboardResponse.text());
-assert.equal(operationsResponse.status, 200, await operationsResponse.text());
-assert.equal(costsResponse.status, 200, await costsResponse.text());
+await assertStatus(dashboardResponse, 200);
+await assertStatus(operationsResponse, 200);
+await assertStatus(costsResponse, 200);
 
 const dashboard = await dashboardResponse.json();
 const operations = await operationsResponse.json();
@@ -48,7 +55,7 @@ const mfaSetup = await fetch(`${apiUrl}/v1/auth/mfa/setup`, {
   method: "POST",
   headers: authorization,
 });
-assert.equal(mfaSetup.status, 200, await mfaSetup.text());
+await assertStatus(mfaSetup, 200);
 const mfa = await mfaSetup.json();
 
 function decodeBase32(value) {
@@ -77,7 +84,7 @@ const mfaConfirm = await fetch(`${apiUrl}/v1/auth/mfa/confirm`, {
   headers: { ...authorization, "content-type": "application/json" },
   body: JSON.stringify({ code: currentTotp(mfa.secret) }),
 });
-assert.equal(mfaConfirm.status, 200, await mfaConfirm.text());
+await assertStatus(mfaConfirm, 200);
 const recoveryCodes = (await mfaConfirm.json()).recovery_codes;
 assert.equal(recoveryCodes.length, 8);
 const recoveryRotation = await fetch(`${apiUrl}/v1/auth/mfa/recovery-codes`, {
@@ -85,7 +92,7 @@ const recoveryRotation = await fetch(`${apiUrl}/v1/auth/mfa/recovery-codes`, {
   headers: { ...authorization, "content-type": "application/json" },
   body: JSON.stringify({ code: recoveryCodes[0] }),
 });
-assert.equal(recoveryRotation.status, 200, await recoveryRotation.text());
+await assertStatus(recoveryRotation, 200);
 assert.equal((await recoveryRotation.json()).recovery_codes.length, 8);
 
 const sourceResponse = await fetch(`${apiUrl}/v1/intelligence/trend-sources`, {
@@ -99,7 +106,7 @@ const sourceResponse = await fetch(`${apiUrl}/v1/intelligence/trend-sources`, {
     authorization_confirmed: true,
   }),
 });
-assert.equal(sourceResponse.status, 201, await sourceResponse.text());
+await assertStatus(sourceResponse, 201);
 const source = await sourceResponse.json();
 const trendResponse = await fetch(`${apiUrl}/v1/intelligence/trends`, {
   method: "POST",
@@ -121,7 +128,7 @@ const trendResponse = await fetch(`${apiUrl}/v1/intelligence/trends`, {
     valid_until: new Date(Date.now() + 4 * 86_400_000).toISOString(),
   }),
 });
-assert.equal(trendResponse.status, 201, await trendResponse.text());
+await assertStatus(trendResponse, 201);
 const seriesResponse = await fetch(`${apiUrl}/v1/intelligence/series`, {
   method: "POST",
   headers: { ...authorization, "content-type": "application/json" },
@@ -132,7 +139,7 @@ const seriesResponse = await fetch(`${apiUrl}/v1/intelligence/series`, {
     target_episode_count: 12,
   }),
 });
-assert.equal(seriesResponse.status, 201, await seriesResponse.text());
+await assertStatus(seriesResponse, 201);
 assert.equal((await seriesResponse.json()).status, "active");
 
 const refresh = await fetch(`${apiUrl}/v1/auth/refresh`, {
@@ -140,7 +147,7 @@ const refresh = await fetch(`${apiUrl}/v1/auth/refresh`, {
   headers: { "content-type": "application/json" },
   body: JSON.stringify({ refresh_token: tokens.refresh_token }),
 });
-assert.equal(refresh.status, 200, await refresh.text());
+await assertStatus(refresh, 200);
 const rotated = await refresh.json();
 assert.notEqual(rotated.refresh_token, tokens.refresh_token);
 

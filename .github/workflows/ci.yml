@@ -40,6 +40,7 @@ jobs:
       - run: pip install -r services/api/requirements.txt
       - run: pytest services/api/tests
         env:
+          AUTH_RATE_LIMIT_PER_MINUTE: "120"
           PYTHONPATH: services/api
       - run: python -m compileall -q services/api/darkttk
 
